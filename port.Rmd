@@ -1,0 +1,96 @@
+---
+title: "time_series_report"
+author: "Román Landa"
+date: "2024-10-29"
+output: html_document
+---
+
+PREDICCIONES PARA EL ESTIMADOR MENSUAL DE ACTIVIDAD ECONÓMICA
+
+# Intrducción
+
+El Estimador mensual de actividad económica (EMAE) refleja la evolución mensual de la actividad económica del conjunto de los sectores productivos a nivel nacional. Este es un indicador provisorio de la evolución del PIB a precios constantes de 2004 que será difundido con un rezago de 50 a 60 días de concluido el mes de referencia.
+
+El indicador es un índice Laspeyres que ofrece una pauta del comportamiento de la actividad económica real con 
+una frecuencia mayor a la del PIB trimestral a precios constantes. Su cálculo se estructura en la agregación del valor agregado a precios básicos de cada una de las actividades económicas más los impuestos netos de subsidios a los productos, utilizando las ponderaciones de las cuentas nacionales base 2004 de la República Argentina. Se trata de replicar los métodos de cálculo del PIB trimestral y/o anual, en la medida en que lo permite la disponibilidad de fuentes de información para un período más corto.
+
+Es necesario enfatizar que el EMAE se elabora con información parcial, de carácter provisorio -dado que en algunos
+casos es corregida y/o completada por la fuente- o con indicadores alternativos a los que se utilizan para el cálculo trimestral, en tanto se han evaluado como adecuadas aproximaciones a éstos. Dado que la estimación del PIB trimestral reúne mayor cantidad de datos, por cerrarse y difundirse unos 30 días después que el EMAE, es habitual que se observen diferencias entre las variaciones trimestrales de ambos indicadores.
+
+# Objetivo
+
+El objetivo de este informe es aplicar de manera práctica las herramientas analíticas adquiridas en la cátedra de Series de Tiempo, mediante un análisis descriptivo y predictivo de series temporales reales. Se busca así fortalecer la comprensión de los métodos estudiados y su aplicación en datos económicos, evaluando tanto las tendencias históricas como las posibles proyecciones del comportamiento económico en el corto y mediano plazo.
+
+# Bibliografia
+
+Tanto en la cátedra como en este trabajo nos basamos el los libros:
+
+* ![Forecasting: Principles and Practice (3rd ed)](https://otexts.com/fpp3/) de Rob J Hyndman and George Athanasopoulos
+
+* Time Series Analysis: Univariate and Multivariate Methods (2nd er) de Wiliam Wei
+
+# Data
+
+La API de Series de Tiempo de Argentina, permite consultar indicadores con evolución cronológica publicados en formatos abiertos por organismos de la Administración Pública Nacional. Haremos uso de dicha API para traeros la serie [EMAE. Base 2004](https://datos.gob.ar/series/api/series/?ids=143.3_NO_PR_2004_A_21)
+
+```{r}
+source("enviroment.R")
+# API EMAE datos.gob
+emae_mensual <- read.csv("https://infra.datos.gob.ar/catalog/sspm/dataset/143/distribution/143.3/download/emae-valores-anuales-indice-base-2004-mensual.csv")
+```
+
+
+
+```{r}
+# Extrae el año
+emae_mensual$indice_tiempo <- as.Date(emae_mensual$indice_tiempo, format = "%Y-%m-%d") 
+emae_mensual$year <- year(emae_mensual$indice_tiempo)
+emae_mensual$periodo <- format(emae_mensual$indice_tiempo, "%Y-%m")
+```
+
+Vemos que actualmente tenemos valores publicados hasta el mes de Agosto 2024. Decidimos guardaremos todos los meses de dicho año para luego comparar con nuestras predicicones
+
+```{r}
+values_to_predict <- tail(emae_mensual$emae_original, 8)
+# Eliminar los últimos 8 registros de emae_mensual
+emae_mensual <- emae_mensual[1:(nrow(emae_mensual) - 8), ]
+```
+
+```{r}
+emae_mensual$year_factor <- as.factor(emae_mensual$year)
+# Creo un Time Serie object
+emae_mensual_ts <- emae_mensual %>%
+  mutate(periodo = yearmonth(periodo)) %>%  
+  as_tsibble(index = periodo)
+```
+
+# Análisis Descriptivo
+
+```{r}
+ggplot(emae_mensual_ts, aes(x = indice_tiempo, y = emae_original)) + 
+  geom_line() +
+  labs(title = "Serie de Tiempo EMAE (2010-2020)", x = "Fecha", y = "Valor") +
+  theme_minimal()
+```
+
+Grafico además un box plot por año, para ver si la variancia es constante.
+```{r}
+ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
+  geom_boxplot() +
+  labs(title = "Boxplot de Valores por Año (2010-2020)", x = "Año", y = "EMAE") +
+  theme_minimal() # no tiene variancia constante
+```
+Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion grafica, como no tenemos certeza realizamos el grafico de box y cox para probar posibles transformaicones
+
+
+## Diferenciaciones
+
+Vemos que la serie presenta una estacionaridad marcada año tras año, es por esto que decidimos diferenciar esa parte 
+
+```{r}
+emae_mensual_ts %>% 
+  gg_tsdisplay(difference(emae_original, 12), 
+               plot_type='partial',
+               lag=36)
+```
+Por los graficos de FAC y FACP podemos notar una forma de AR(1) en la parte regular
