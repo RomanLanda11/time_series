@@ -83,6 +83,27 @@ ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
 Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion grafica, como no tenemos certeza realizamos el grafico de box y cox para probar posibles transformaicones
 
 
+## Transformación
+
+```{r}
+boxcox(lm(data = emae_mensual_ts, emae_original ~ 1), plotit = T, lambda = seq(-3, 8, by = 0.5))
+```
+```{r}
+# Parámetro lambda
+lambda <- 3
+# Aplicar la transformación
+emae_mensual_ts <- emae_mensual_ts %>%
+  mutate(emae_transformed = (emae_original^lambda - 1) / lambda)
+```
+
+```{r}
+ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_transformed)) +
+  geom_boxplot() +
+  labs(title = "Boxplot de Valores por Año (2010-2020)", x = "Año", y = "EMAE") +
+  theme_minimal() # no tiene variancia constante
+```
+
+
 ## Diferenciaciones
 
 Vemos que la serie presenta una estacionaridad marcada año tras año, es por esto que decidimos diferenciar esa parte 
@@ -93,4 +114,64 @@ emae_mensual_ts %>%
                plot_type='partial',
                lag=36)
 ```
-Por los graficos de FAC y FACP podemos notar una forma de AR(1) en la parte regular
+Por los graficos de FAC y FACP podemos notar una forma de AR(1) en la parte regular, tal vez, si consideramos significativos los rezagos 2 y 3 de la FACP y viendo la caida sinusoidal de la FAC podriamos decir que es un AR(3).
+Para la parte estacionaria, vinedo los rezagos 12 y 24, podemos suponer luego de una diferenciación un modelo ARIMA(1,1,0) o ARIMA(2,1,0) 
+
+
+```{r}
+# Definir nombres de archivo para guardar los modelos
+fit_original_file <- "fitted/fit_original.rds"
+fit_transformed_file <- "fitted/fit_transformed.rds"
+
+# Ajuste y guardado de fit_original
+if (file.exists(fit_original_file)) {
+  fit_original <- readRDS(fit_original_file)
+  message("Modelo fit_original cargado desde el archivo.")
+} else {
+  fit_original <- emae_mensual_ts %>% 
+    model(
+      arima11 = ARIMA(emae_original ~ pdq(1,0,0) + PDQ(1,1,0)),
+      arima31 = ARIMA(emae_original ~ pdq(3,0,0) + PDQ(1,1,0)),
+      arima11_2 = ARIMA(emae_original ~ pdq(1,0,0) + PDQ(2,1,0)),
+      arima31_2 = ARIMA(emae_original ~ pdq(3,0,0) + PDQ(2,1,0)),
+      auto = ARIMA(emae_original, stepwise = FALSE, approx = FALSE),
+      auto_2 = ARIMA(emae_original, stepwise = TRUE, approx = TRUE)
+    )
+  saveRDS(fit_original, fit_original_file)
+  message("Modelo fit_original ajustado y guardado en el archivo.")
+}
+
+# Ajuste y guardado de fit_transformed
+if (file.exists(fit_transformed_file)) {
+  fit_transformed <- readRDS(fit_transformed_file)
+  message("Modelo fit_transformed cargado desde el archivo.")
+} else {
+  fit_transformed <- emae_mensual_ts %>% 
+    model(
+      arima11_t = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(1,1,0)),
+      arima31_t = ARIMA(emae_transformed ~ pdq(3,0,0) + PDQ(1,1,0)),
+      arima11_t_2 = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(2,1,0)),
+      arima31_t_2 = ARIMA(emae_transformed ~ pdq(3,0,0) + PDQ(2,1,0)),
+      auto_trans = ARIMA(emae_transformed, stepwise = FALSE, approx = FALSE),
+      auto_trans_2 = ARIMA(emae_transformed, stepwise = TRUE, approx = TRUE)
+    )
+  saveRDS(fit_transformed, fit_transformed_file)
+  message("Modelo fit_transformed ajustado y guardado en el archivo.")
+}
+```
+
+```{r}
+fit_original |> pivot_longer(everything(), names_to = "Model name",
+                    values_to = "Orders")
+```
+
+```{r}
+fit_transformed |> pivot_longer(everything(), names_to = "Model name",
+                    values_to = "Orders")
+```
+
+```{r}
+rbind(glance(fit_original),glance(fit_transformed))
+```
+
+
