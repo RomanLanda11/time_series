@@ -280,3 +280,24 @@ Vemos que a causa de los outliers la distribución de los residuos es asimétric
 
 # Predicción
 
+```{r}
+f <- forecast(fit_original, h = 8) |>
+  filter(.model == 'auto') |>
+  autoplot(emae_mensual_ts) + # Asegúrate de que emae_mensual_ts sea tu serie original
+  autolayer(emae_mensual_ts, series = "Serie Original", color = "cyan4") + # Añade la serie original
+  labs(
+    title = "EMAE con predicciones del modelo ARIMA",
+    y = "Número de personas (millones)",
+    x = "Tiempo"
+  ) +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+f
+```
+
+```{r}
+ggplotly(f)
+```
+
+
+
