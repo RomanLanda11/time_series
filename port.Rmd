@@ -64,7 +64,7 @@ emae_mensual_ts <- emae_mensual %>%
   as_tsibble(index = periodo)
 ```
 
-# Análisis Descriptivo
+# Identificación de Serie
 
 ```{r}
 ggplot(emae_mensual_ts, aes(x = indice_tiempo, y = emae_original)) + 
@@ -74,6 +74,7 @@ ggplot(emae_mensual_ts, aes(x = indice_tiempo, y = emae_original)) +
 ```
 
 Grafico además un box plot por año, para ver si la variancia es constante.
+
 ```{r}
 ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
   geom_boxplot() +
@@ -114,9 +115,10 @@ emae_mensual_ts %>%
                plot_type='partial',
                lag=36)
 ```
-Por los graficos de FAC y FACP podemos notar una forma de AR(1) en la parte regular, tal vez, si consideramos significativos los rezagos 2 y 3 de la FACP y viendo la caida sinusoidal de la FAC podriamos decir que es un AR(3).
+Por los graficos de FAC y FACP podemos notar una forma de AR(1) en la parte regular, tal vez, si consideramos significativos los rezagos 2 y 3 de la FACP y viendo la caida sinusoidal de la FAC podriamos decir que es hasta un AR(3), pero nos quedamo con el modelo mas sencilo.
 Para la parte estacionaria, vinedo los rezagos 12 y 24, podemos suponer luego de una diferenciación un modelo ARIMA(1,1,0) o ARIMA(2,1,0) 
 
+## Ajuste de Serie
 
 ```{r}
 # Definir nombres de archivo para guardar los modelos
@@ -124,16 +126,15 @@ fit_original_file <- "fitted/fit_original.rds"
 fit_transformed_file <- "fitted/fit_transformed.rds"
 
 # Ajuste y guardado de fit_original
-if (file.exists(fit_original_file)) {
+NOTFIT = TRUE
+if (NOTFIT) {
   fit_original <- readRDS(fit_original_file)
   message("Modelo fit_original cargado desde el archivo.")
 } else {
   fit_original <- emae_mensual_ts %>% 
     model(
       arima11 = ARIMA(emae_original ~ pdq(1,0,0) + PDQ(1,1,0)),
-      arima31 = ARIMA(emae_original ~ pdq(3,0,0) + PDQ(1,1,0)),
       arima11_2 = ARIMA(emae_original ~ pdq(1,0,0) + PDQ(2,1,0)),
-      arima31_2 = ARIMA(emae_original ~ pdq(3,0,0) + PDQ(2,1,0)),
       auto = ARIMA(emae_original, stepwise = FALSE, approx = FALSE),
       auto_2 = ARIMA(emae_original, stepwise = TRUE, approx = TRUE)
     )
@@ -142,16 +143,14 @@ if (file.exists(fit_original_file)) {
 }
 
 # Ajuste y guardado de fit_transformed
-if (file.exists(fit_transformed_file)) {
+if (NOTFIT) {
   fit_transformed <- readRDS(fit_transformed_file)
   message("Modelo fit_transformed cargado desde el archivo.")
 } else {
   fit_transformed <- emae_mensual_ts %>% 
     model(
       arima11_t = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(1,1,0)),
-      arima31_t = ARIMA(emae_transformed ~ pdq(3,0,0) + PDQ(1,1,0)),
       arima11_t_2 = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(2,1,0)),
-      arima31_t_2 = ARIMA(emae_transformed ~ pdq(3,0,0) + PDQ(2,1,0)),
       auto_trans = ARIMA(emae_transformed, stepwise = FALSE, approx = FALSE),
       auto_trans_2 = ARIMA(emae_transformed, stepwise = TRUE, approx = TRUE)
     )
@@ -159,6 +158,7 @@ if (file.exists(fit_transformed_file)) {
   message("Modelo fit_transformed ajustado y guardado en el archivo.")
 }
 ```
+## Elección de Serie
 
 ```{r}
 fit_original |> pivot_longer(everything(), names_to = "Model name",
@@ -174,4 +174,109 @@ fit_transformed |> pivot_longer(everything(), names_to = "Model name",
 rbind(glance(fit_original),glance(fit_transformed))
 ```
 
+Lo primero que vemos aqui es que los modelos de la serie no transformada ajustan mucho mejor a los datos.
+Como sospechabamos, la serie no necesita de una transformación, aunque seguiremos testeando esto a lo largo
+del informe. También podemos ver que el mejor modelo es el ajustado automaticamente, un SARIMA(0,1,2)(2,1,2)[12], diferenciado una vez en la parte estacional y una vez en la parte regular. Este será el modelo con el que continuaremos trabajando.
+
+# Diagnostico del Modelo
+
+Previo a realizar predicciones necesitamos comprobar algunos supuestos para los $\hat{a_t}=Z_t - \hat{Z_{t}}$ de nuestra serie:
+
+* $E(a_t)=0$.
+
+* $V(a_t)=\sigma_a^2$ constante.
+
+* *Sean incorrelados.*
+
+* Se distribuyan asintóticamente $N(0,\sigma_a^2)$.
+
+Comenzaremos con un grafico de Residuos vs Timepo para comprobar esperanza y variancia constante
+
+```{r}
+# Extraer los residuos del modelo "auto"
+residuos <- residuals(fit_original, type = "response") %>%
+  filter(.model == "auto")  # Seleccionar el modelo "auto"
+
+# Graficar los residuos vs tiempo
+g1 <- ggplot(residuos, aes(x = periodo, y = .resid)) +
+  geom_point(color = "cyan4") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residuos del modelo SARIMA(0,1,2)(2,1,2)[12] ajustado",
+    x = "",
+    y = "Residuos"
+  ) +
+  theme_minimal()
+ggplotly(g1)
+```
+
+Vemos aqui marcados outliers en Marzo y Abril 2020, inicio de la pandemia causada por el covid-19. Obviando estos valores, los residuos parecen constantes y centrados en cero.
+
+Continuamos nuestro analisis con el mas importante de los supuestos. Miraremos el grafico de autocorrelacion para los residuos, esperando que estos esten incorrelados
+
+```{r}
+# Gráfico de autocorrelación para los residuos
+acf(residuos$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
+
+# Convertir autocorrelaciones en un DataFrame para graficarlas con ggplot
+# acf_data <- acf(residuos$.resid, plot = FALSE)
+# acf_df <- data.frame(
+#   Lag = acf_data$lag,
+#   ACF = acf_data$acf
+# )
+# 
+# # Graficar autocorrelación con ggplot
+# acf_plot <- ggplot(acf_df, aes(x = Lag, y = ACF)) +
+#   geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
+#   geom_hline(yintercept = 0, color = "black") +
+#   geom_hline(yintercept = c(-1.96 / sqrt(length(residuos$.resid)), 
+#                             1.96 / sqrt(length(residuos$.resid))), 
+#              linetype = "dashed", color = "red") +
+#   labs(
+#     title = "Autocorrelación de los residuos",
+#     x = "Desfase (Lag)",
+#     y = "Autocorrelación"
+#   ) +
+#   theme_minimal()
+```
+```{r}
+#TODO: test para los rezagos
+
+```
+
+Como podemos observar, los residuos son ruido blanco, por lo que solo nos queda comprobar el supuesto de distribución asintotica normal para poder realizar intervalos de confianza a nuestras predicciones
+
+```{r}
+# Histograma de los residuos
+h <- ggplot(residuos, aes(x = .resid)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "cyan4", alpha = 0.7) +
+  geom_density(color = "red", size = 1) +
+  labs(
+    title = "Histograma de los residuos",
+    x = "Residuos",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+
+# QQ-Plot normal
+qq <- ggplot(residuos, aes(sample = .resid)) +
+  stat_qq(color = "cyan4") +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  labs(
+    title = "QQ-Plot de los residuos",
+    x = "Cuantiles teóricos",
+    y = "Cuantiles de los residuos"
+  ) +
+  theme_minimal()
+
+h/qq
+```
+Vemos que a causa de los outliers la distribución de los residuos es asimétrica
+
+```{r}
+#shapiro.test(residuos$.resid)
+```
+
+
+# Predicción
 
