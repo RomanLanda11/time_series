@@ -1,11 +1,26 @@
 ---
-title: "time_series_report"
-author: "Román Landa"
-date: "2024-10-29"
-output: html_document
+title: "SERIES DE TIEMPO: Estimador Mensual de Actividad Económica Argentina"
+author: "LANDA, Román"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::material:
+    self_contained: true
+    code_folding: hide
+    lightbox: true
+    thumbnails: true
+    highlight: kate
 ---
 
-PREDICCIONES PARA EL ESTIMADOR MENSUAL DE ACTIVIDAD ECONÓMICA
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  fig.width = 7, 
+  fig.height = 5, 
+  echo = TRUE, 
+  warning = FALSE,
+  message = FALSE,
+  #out.width = "100%"
+)
+```
 
 # Intrducción
 
@@ -21,32 +36,23 @@ casos es corregida y/o completada por la fuente- o con indicadores alternativos 
 
 El objetivo de este informe es aplicar de manera práctica las herramientas analíticas adquiridas en la cátedra de Series de Tiempo, mediante un análisis descriptivo y predictivo de series temporales reales. Se busca así fortalecer la comprensión de los métodos estudiados y su aplicación en datos económicos, evaluando tanto las tendencias históricas como las posibles proyecciones del comportamiento económico en el corto y mediano plazo.
 
-# Bibliografia
 
-Tanto en la cátedra como en este trabajo nos basamos el los libros:
-
-* ![Forecasting: Principles and Practice (3rd ed)](https://otexts.com/fpp3/) de Rob J Hyndman and George Athanasopoulos
-
-* Time Series Analysis: Univariate and Multivariate Methods (2nd er) de Wiliam Wei
-
-# Data
+# Datos
 
 La API de Series de Tiempo de Argentina, permite consultar indicadores con evolución cronológica publicados en formatos abiertos por organismos de la Administración Pública Nacional. Haremos uso de dicha API para traeros la serie [EMAE. Base 2004](https://datos.gob.ar/series/api/series/?ids=143.3_NO_PR_2004_A_21)
+
 
 ```{r}
 source("enviroment.R")
 # API EMAE datos.gob
 emae_mensual <- read.csv("https://infra.datos.gob.ar/catalog/sspm/dataset/143/distribution/143.3/download/emae-valores-anuales-indice-base-2004-mensual.csv")
-```
 
-
-
-```{r}
 # Extrae el año
 emae_mensual$indice_tiempo <- as.Date(emae_mensual$indice_tiempo, format = "%Y-%m-%d") 
 emae_mensual$year <- year(emae_mensual$indice_tiempo)
 emae_mensual$periodo <- format(emae_mensual$indice_tiempo, "%Y-%m")
 ```
+
 
 Vemos que actualmente tenemos valores publicados hasta el mes de Agosto 2024. Decidimos guardaremos todos los meses de dicho año para luego comparar con nuestras predicicones
 
@@ -54,9 +60,7 @@ Vemos que actualmente tenemos valores publicados hasta el mes de Agosto 2024. De
 values_to_predict <- tail(emae_mensual$emae_original, 8)
 # Eliminar los últimos 8 registros de emae_mensual
 emae_mensual <- emae_mensual[1:(nrow(emae_mensual) - 8), ]
-```
 
-```{r}
 emae_mensual$year_factor <- as.factor(emae_mensual$year)
 # Creo un Time Serie object
 emae_mensual_ts <- emae_mensual %>%
@@ -66,28 +70,36 @@ emae_mensual_ts <- emae_mensual %>%
 
 # Identificación de Serie
 
-```{r}
-ggplot(emae_mensual_ts, aes(x = indice_tiempo, y = emae_original)) + 
-  geom_line() +
-  labs(title = "Serie de Tiempo EMAE (2010-2020)", x = "Fecha", y = "Valor") +
+En primer instancia querremos usar nuestros conocimientos para identificar un modelo que ajuste correctamente a nuestros datos de forma "manual". Es por esto que comenzamos observando la evolución del EMAE en el tiempo (con base 100 al inicio de 2004)
+
+```{r, fig.width=5, fig.height=3}
+s1 <- ggplot(emae_mensual_ts, aes(x = indice_tiempo, y = emae_original)) + 
+  geom_line(color = "cyan4") +
+  labs(title = "Serie de Tiempo EMAE", x = "Fecha", y = "Indice 2004 = 100") +
   theme_minimal()
+ggplotly(s1)
 ```
 
-Grafico además un box plot por año, para ver si la variancia es constante.
+Tambien se grafica un box plot por año, para ver si la variancia es constante.
 
-```{r}
+```{r, fig.width=7, fig.height=4}
 ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
-  geom_boxplot() +
-  labs(title = "Boxplot de Valores por Año (2010-2020)", x = "Año", y = "EMAE") +
+  geom_boxplot(fill = "cyan4") +
+  labs(title = "Boxplot de Valores por Año", x = "Año", y = 'Indice 2004 = 100') +
   theme_minimal() # no tiene variancia constante
 ```
-Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion grafica, como no tenemos certeza realizamos el grafico de box y cox para probar posibles transformaicones
+Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion gráfica, como no tenemos certeza realizamos el grafico de Box y Cox para probar posibles transformaicones
 
 
 ## Transformación
 
+Sabemos que una de las formas de estabilizar la variancia en nuestra serie es realizando alguna transformación como lo son la *logarítmica* o *cuadrática*. 
+Se probaron algunas transformaciones en la serie pero ninguna parecia tener una implicancia positiva en la estabilizacion de la variancia, por ello se decidió presentar la transformacion recomendad por el gráfico de Box y Cox solo a modo de ejemplo
+
 ```{r}
-boxcox(lm(data = emae_mensual_ts, emae_original ~ 1), plotit = T, lambda = seq(-3, 8, by = 0.5))
+boxcox(lm(data = emae_mensual_ts, emae_original ~ 1), 
+       plotit = T, 
+       lambda = seq(-3, 8, by = 0.5))
 ```
 ```{r}
 # Parámetro lambda
@@ -95,19 +107,17 @@ lambda <- 3
 # Aplicar la transformación
 emae_mensual_ts <- emae_mensual_ts %>%
   mutate(emae_transformed = (emae_original^lambda - 1) / lambda)
-```
 
-```{r}
 ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_transformed)) +
-  geom_boxplot() +
-  labs(title = "Boxplot de Valores por Año (2010-2020)", x = "Año", y = "EMAE") +
+  geom_boxplot(fill="cyan4") +
+  labs(title = "Boxplot de Valores por Año", x = "Año", y = 'Indice 2004 = 100') +
   theme_minimal() # no tiene variancia constante
 ```
-
+Como mencionamos anteriormente, esta transformación solo parece cambiar la escala pero no la forma de la variancia anual, por lo que continuaremos nuestro trabajo con la serie original.
 
 ## Diferenciaciones
 
-Vemos que la serie presenta una estacionaridad marcada año tras año, es por esto que decidimos diferenciar esa parte 
+Al analizar la serie temporal del EMAE, observamos un patrón de estacionalidad recurrente, donde las fluctuaciones anuales se mantienen consistentemente a lo largo del tiempo. Para abordar este comportamiento y trabajar con una serie estacionaria (requisito fundamental para los modelos ARIMA), decidimos aplicar una diferenciación estacional. Este proceso nos permite eliminar los componentes estacionales y centrar nuestro análisis en las variaciones más relevantes de la tendencia y los ciclos.
 
 ```{r}
 emae_mensual_ts %>% 
@@ -115,10 +125,30 @@ emae_mensual_ts %>%
                plot_type='partial',
                lag=36)
 ```
-Por los graficos de FAC y FACP podemos notar una forma de AR(1) en la parte regular, tal vez, si consideramos significativos los rezagos 2 y 3 de la FACP y viendo la caida sinusoidal de la FAC podriamos decir que es hasta un AR(3), pero nos quedamo con el modelo mas sencilo.
-Para la parte estacionaria, vinedo los rezagos 12 y 24, podemos suponer luego de una diferenciación un modelo ARIMA(1,1,0) o ARIMA(2,1,0) 
+Al analizar los gráficos de la Función de Autocorrelación (FAC) y la Función de Autocorrelación Parcial (FACP), identificamos características que sugieren un modelo autorregresivo (AR) en la parte regular de la serie. En particular:
 
-## Ajuste de Serie
+* La FAC muestra una caída exponencial y un patrón sinusoidal, característico de un modelo AR.
+
+* La FACP resalta significancia en los rezagos 2 y 3, lo que podría apuntar a un modelo $AR(3)$. Sin embargo, optamos por el modelo más sencillo, $AR(1)$, para mantener la parsimonia.
+
+Para la parte estacional, observamos picos significativos en los rezagos 12 y 24, lo que indica una estacionalidad anual bien definida. Luego de aplicar una diferenciación estacional, consideramos los siguientes modelos como candidatos:
+
+* $ARIMA(1,1,0)$: Un modelo simple que captura la dinámica principal.
+
+* $ARIMA(2,1,0)$: Una extensión que podría reflejar interacciones adicionales entre rezagos.
+
+Finalmente, la selección del modelo se basará en criterios de ajuste como AIC, BIC y análisis de residuos para garantizar un balance la bondad de ajuste y lo parsimoñoso del modelo.
+
+
+## Ajuste de la Serie
+
+A partir del análisis previo de los gráficos de la FAC y la FACP, identificamos posibles configuraciones para los modelos ARIMA que se ajustan tanto a la parte regular como a la estacional de la serie. Con base en estos hallazgos, y para garantizar un análisis robusto, procederemos a ajustar los modelos identificados de dos maneras:
+
+* **Modelos identificados manualmente:** Utilizaremos las configuraciones sugeridas (por ejemplo, $ARIMA(1,1,0)$ y $ARIMA(2,1,0)$) como punto de partida para verificar su desempeño en el ajuste de la serie.
+
+* **Modelos automáticos:** Exploraremos opciones generadas automáticamente mediante métodos de selección óptimos basados en criterios como AIC y BIC, que evalúan el balance entre la complejidad del modelo y su capacidad de predicción.
+
+De esta manera, compararemos los resultados de ambos enfoques para determinar cuál ofrece el mejor ajuste y predicción, siempre considerando la parsimonia y la calidad de los residuos.
 
 ```{r}
 # Definir nombres de archivo para guardar los modelos
@@ -129,7 +159,7 @@ fit_transformed_file <- "fitted/fit_transformed.rds"
 NOTFIT = TRUE
 if (NOTFIT) {
   fit_original <- readRDS(fit_original_file)
-  message("Modelo fit_original cargado desde el archivo.")
+  message("Modelo fit_original cargado desde \fitted.")
 } else {
   fit_original <- emae_mensual_ts %>% 
     model(
@@ -139,85 +169,137 @@ if (NOTFIT) {
       auto_2 = ARIMA(emae_original, stepwise = TRUE, approx = TRUE)
     )
   saveRDS(fit_original, fit_original_file)
-  message("Modelo fit_original ajustado y guardado en el archivo.")
+  message("Modelo fit_original ajustado y guardado en \fitted.")
 }
 
-# Ajuste y guardado de fit_transformed
-if (NOTFIT) {
-  fit_transformed <- readRDS(fit_transformed_file)
-  message("Modelo fit_transformed cargado desde el archivo.")
-} else {
-  fit_transformed <- emae_mensual_ts %>% 
-    model(
-      arima11_t = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(1,1,0)),
-      arima11_t_2 = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(2,1,0)),
-      auto_trans = ARIMA(emae_transformed, stepwise = FALSE, approx = FALSE),
-      auto_trans_2 = ARIMA(emae_transformed, stepwise = TRUE, approx = TRUE)
-    )
-  saveRDS(fit_transformed, fit_transformed_file)
-  message("Modelo fit_transformed ajustado y guardado en el archivo.")
-}
-```
-## Elección de Serie
+# # Ajuste y guardado de fit_transformed
+# if (NOTFIT) {
+#   fit_transformed <- readRDS(fit_transformed_file)
+#   message("Modelo fit_transformed cargado desde el archivo.")
+# } else {
+#   fit_transformed <- emae_mensual_ts %>% 
+#     model(
+#       arima11_t = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(1,1,0)),
+#       arima11_t_2 = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(2,1,0)),
+#       auto_trans = ARIMA(emae_transformed, stepwise = FALSE, approx = FALSE),
+#       auto_trans_2 = ARIMA(emae_transformed, stepwise = TRUE, approx = TRUE)
+#     )
+#   saveRDS(fit_transformed, fit_transformed_file)
+#   message("Modelo fit_transformed ajustado y guardado en el archivo.")
+# }
 
-```{r}
 fit_original |> pivot_longer(everything(), names_to = "Model name",
                     values_to = "Orders")
+
+glance(fit_original)
 ```
+
+De la tabla presentada, obtenemos las siguientes observaciones clave:
+
+1. El mejor modelo identificado es el ajustado automáticamente, $SARIMA(0,1,2)(2,1,2)_{12}$. Este modelo utiliza una diferenciación y un comportamiento $MA(2)$ en la parte regular y una diferenciación y un comportamiento $ARMA(2,2)$ en la parte estacional.
+
+2. El modelo $SARIMA(1,0,0)(2,1,0)_{(12)}$ presenta un desempeño competitivo y será considerado como una alternativa más sencilla para comparación.
+
+A partir de estas conclusiones, trabajaremos con ambos modelos ($SARIMA(0,1,2)(2,1,2)_{12}$. y $SARIMA(1,0,0)(2,1,0)_{(12)}$) en las siguientes etapas del análisis, evaluando su desempeño en términos de ajuste y predicción.
+
+
+### Modelos
 
 ```{r}
-fit_transformed |> pivot_longer(everything(), names_to = "Model name",
-                    values_to = "Orders")
+# Extraer parámetros de los modelos ajustados
+fit_original %>%
+  tidy() %>%  # Extraer parámetros en formato legible
+  select(.model, term, estimate)%>%
+  filter(.model %in% c("auto", "arima11_2"))
 ```
+Los modelos estimados con los que trabajaremos se notan como:
+
+$$ SARIMA(1,0,0)(2,1,0)_{(12)} \Rightarrow (1-0,92B)(1+0,5B^{12}+0,29B^{13})(1-B^{12})Z_t=a_t $$
+$$ SARIMA(0,1,2)(2,1,2)_{12} \Rightarrow  (1-0,79B^{12}+0,42B^{13})(1-B)(1-B^{12})Z_t=(1-0,97B+0,96B^2)(1+1,46B^{12}-0,69B^{13})a_t  $$
+Para cerrar esta sección se presenta un grafico interactivo que nos permite dilusidar lo parecido y lo preciso de ambos modelos para los ultimos 4 años.
 
 ```{r}
-rbind(glance(fit_original),glance(fit_transformed))
+#TODO: como hago para ver los phi y teta estimados?
+
+
+fitted_values <- fitted_values %>%
+  mutate(periodo_date = parse_date_time(periodo, orders = "Y b")) # Convierte fecha
+
+fitted_values_filtered <- fitted_values %>%
+  filter(
+    periodo_date >= ymd("2019-01-01") & periodo_date <= ymd("2024-12-31"),
+    .model %in% c("auto", "arima11_2") # Filtrar modelos
+  )
+
+# Graficar los valores filtrados
+g <- ggplot(data = fitted_values_filtered, aes(x = periodo_date)) +
+  geom_line(aes(y = emae_original, color = "Serie Original"), size = 1) +
+  geom_line(aes(y = .fitted, color = .model), linetype = "dashed", size = 0.8) +
+  labs(
+    title = "Serie Original y Estimaciones de los Modelos (2019-2024)",
+    x = "Tiempo",
+    y = "Índice 2004 = 100",
+    color = "Leyenda"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Serie Original" = "cyan4", "arima11_2" = "green4", "auto" = "purple4"))
+ggplotly(g)
 ```
 
-Lo primero que vemos aqui es que los modelos de la serie no transformada ajustan mucho mejor a los datos.
-Como sospechabamos, la serie no necesita de una transformación, aunque seguiremos testeando esto a lo largo
-del informe. También podemos ver que el mejor modelo es el ajustado automaticamente, un SARIMA(0,1,2)(2,1,2)[12], diferenciado una vez en la parte estacional y una vez en la parte regular. Este será el modelo con el que continuaremos trabajando.
 
 # Diagnostico del Modelo
 
-Previo a realizar predicciones necesitamos comprobar algunos supuestos para los $\hat{a_t}=Z_t - \hat{Z_{t}}$ de nuestra serie:
+Antes de proceder con las predicciones, es fundamental verificar que los residuos del modelo, definidos como $\hat{a_t}=Z_t - \hat{Z_{t}}$ cumplan con los supuestos planteados a la hora de hacer el ajuste:
 
-* $E(a_t)=0$.
+1. $E(a_t)=0$. Los residuos deben tener media cero.
 
-* $V(a_t)=\sigma_a^2$ constante.
+2. $V(a_t)=\sigma_a^2$. La varianza de los residuos debe ser constante a lo largo del tiempo.
 
-* *Sean incorrelados.*
+3. **Independencia.** Los residuos deben ser incorrelados.
 
-* Se distribuyan asintóticamente $N(0,\sigma_a^2)$.
+4. $a_t \sim N(0,\sigma_a^2)$.Los residuos deben seguir una distribución asintóticamente Normal.
 
-Comenzaremos con un grafico de Residuos vs Timepo para comprobar esperanza y variancia constante
+Comenzaremos con un gráfico de Residuos vs Timepo para comprobar esperanza y variancia constante
 
 ```{r}
+#TODO: Hace falta ver errores standard?
+
 # Extraer los residuos del modelo "auto"
-residuos <- residuals(fit_original, type = "response") %>%
-  filter(.model == "auto")  # Seleccionar el modelo "auto"
+residuos1 <- residuals(fit_original, type = "response") %>%
+  filter(.model == "auto")  #  modelo "auto"
+residuos2 <- residuals(fit_original, type = "response") %>%
+  filter(.model == "arima11_2")  #arima11_2
 
 # Graficar los residuos vs tiempo
-g1 <- ggplot(residuos, aes(x = periodo, y = .resid)) +
+g1 <- ggplot(residuos1, aes(x = periodo, y = .resid)) +
   geom_point(color = "cyan4") +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
   labs(
-    title = "Residuos del modelo SARIMA(0,1,2)(2,1,2)[12] ajustado",
+    title = "Residuos SARIMA(0,1,2)(2,1,2)[12]",
     x = "",
     y = "Residuos"
   ) +
   theme_minimal()
-ggplotly(g1)
+g2 <- ggplot(residuos2, aes(x = periodo, y = .resid)) +
+  geom_point(color = "cyan4") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residuos SARIMA(1,0,0)(2,1,0)[12]",
+    x = "",
+    y = "Residuos"
+  ) +
+  theme_minimal()
+g1+g2
 ```
 
-Vemos aqui marcados outliers en Marzo y Abril 2020, inicio de la pandemia causada por el covid-19. Obviando estos valores, los residuos parecen constantes y centrados en cero.
+Vemos aqui marcados outliers en Marzo y Abril 2020, inicio de la pandemia causada por el covid-19. Obviando estos valores, los residuos parecen tener variancia constantes y estar centrados en cero.
 
 Continuamos nuestro analisis con el mas importante de los supuestos. Miraremos el grafico de autocorrelacion para los residuos, esperando que estos esten incorrelados
 
 ```{r}
 # Gráfico de autocorrelación para los residuos
-acf(residuos$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
-
+r1 <- acf(residuos1$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
+r2 <- acf(residuos2$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
 # Convertir autocorrelaciones en un DataFrame para graficarlas con ggplot
 # acf_data <- acf(residuos$.resid, plot = FALSE)
 # acf_df <- data.frame(
@@ -238,7 +320,10 @@ acf(residuos$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
 #     y = "Autocorrelación"
 #   ) +
 #   theme_minimal()
+r1+r2
+#TODO: ya descarto el modelo manual?
 ```
+
 ```{r}
 #TODO: test para los rezagos
 
@@ -273,9 +358,6 @@ h/qq
 ```
 Vemos que a causa de los outliers la distribución de los residuos es asimétrica
 
-```{r}
-#shapiro.test(residuos$.resid)
-```
 
 
 # Predicción
@@ -296,8 +378,16 @@ f
 ```
 
 ```{r}
-ggplotly(f)
+#TODO: Comparo dos modelos?
 ```
 
+# Discusión
 
+# Bibliografia
+
+Tanto en la cátedra como en este trabajo nos basamos el los libros:
+
+* [Forecasting: Principles and Practice (3rd ed)](https://otexts.com/fpp3/) de Rob J Hyndman and George Athanasopoulos
+
+* Time Series Analysis: Univariate and Multivariate Methods (2nd er) de Wiliam Wei
 
