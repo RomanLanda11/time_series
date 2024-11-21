@@ -18,7 +18,7 @@ knitr::opts_chunk$set(
   echo = TRUE, 
   warning = FALSE,
   message = FALSE,
-  #out.width = "100%"
+  out.width = "100%"
 )
 ```
 
@@ -51,6 +51,7 @@ emae_mensual <- read.csv("https://infra.datos.gob.ar/catalog/sspm/dataset/143/di
 emae_mensual$indice_tiempo <- as.Date(emae_mensual$indice_tiempo, format = "%Y-%m-%d") 
 emae_mensual$year <- year(emae_mensual$indice_tiempo)
 emae_mensual$periodo <- format(emae_mensual$indice_tiempo, "%Y-%m")
+head(emae_mensual)
 ```
 
 
@@ -85,8 +86,10 @@ Tambien se grafica un box plot por año, para ver si la variancia es constante.
 ```{r, fig.width=7, fig.height=4}
 ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
   geom_boxplot(fill = "cyan4") +
-  labs(title = "Boxplot de Valores por Año", x = "Año", y = 'Indice 2004 = 100') +
-  theme_minimal() # no tiene variancia constante
+  labs(title = "Boxplot de Valores Anuales", 
+       x = "Year", 
+       y = "Indice 2004 = 100") +
+  theme_minimal()
 ```
 Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion gráfica, como no tenemos certeza realizamos el grafico de Box y Cox para probar posibles transformaicones
 
@@ -110,7 +113,7 @@ emae_mensual_ts <- emae_mensual_ts %>%
 
 ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_transformed)) +
   geom_boxplot(fill="cyan4") +
-  labs(title = "Boxplot de Valores por Año", x = "Año", y = 'Indice 2004 = 100') +
+  labs(title = "Boxplot de Valores anuale", x = "Year", y = 'Indice 2004 = 100') +
   theme_minimal() # no tiene variancia constante
 ```
 Como mencionamos anteriormente, esta transformación solo parece cambiar la escala pero no la forma de la variancia anual, por lo que continuaremos nuestro trabajo con la serie original.
@@ -219,8 +222,10 @@ $$ SARIMA(0,1,2)(2,1,2)_{12} \Rightarrow  (1-0,79B^{12}+0,42B^{13})(1-B)(1-B^{12
 Para cerrar esta sección se presenta un grafico interactivo que nos permite dilusidar lo parecido y lo preciso de ambos modelos para los ultimos 4 años.
 
 ```{r}
-#TODO: como hago para ver los phi y teta estimados?
-
+fitted_values <- fit_original %>%
+  augment() %>%  # Obtener valores ajustados
+  as_tibble() %>% # Convertir a tibble para ggplot
+  mutate(Modelo = .model)
 
 fitted_values <- fitted_values %>%
   mutate(periodo_date = parse_date_time(periodo, orders = "Y b")) # Convierte fecha
@@ -320,8 +325,8 @@ r2 <- acf(residuos2$.resid, main = "Autocorrelación de los residuos", lag.max =
 #     y = "Autocorrelación"
 #   ) +
 #   theme_minimal()
-r1+r2
-#TODO: ya descarto el modelo manual?
+# r1+r2
+#TODO: ya descarto el modelo?
 ```
 
 ```{r}
@@ -333,7 +338,7 @@ Como podemos observar, los residuos son ruido blanco, por lo que solo nos queda 
 
 ```{r}
 # Histograma de los residuos
-h <- ggplot(residuos, aes(x = .resid)) +
+h <- ggplot(residuos1, aes(x = .resid)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "cyan4", alpha = 0.7) +
   geom_density(color = "red", size = 1) +
   labs(
@@ -344,7 +349,7 @@ h <- ggplot(residuos, aes(x = .resid)) +
   theme_minimal()
 
 # QQ-Plot normal
-qq <- ggplot(residuos, aes(sample = .resid)) +
+qq <- ggplot(residuos1, aes(sample = .resid)) +
   stat_qq(color = "cyan4") +
   stat_qq_line(color = "red", linetype = "dashed") +
   labs(
