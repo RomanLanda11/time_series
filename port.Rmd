@@ -51,7 +51,7 @@ emae_mensual <- read.csv("https://infra.datos.gob.ar/catalog/sspm/dataset/143/di
 emae_mensual$indice_tiempo <- as.Date(emae_mensual$indice_tiempo, format = "%Y-%m-%d") 
 emae_mensual$year <- year(emae_mensual$indice_tiempo)
 emae_mensual$periodo <- format(emae_mensual$indice_tiempo, "%Y-%m")
-head(emae_mensual)
+kable(tail(emae_mensual))
 ```
 
 
@@ -83,7 +83,7 @@ ggplotly(s1)
 
 Tambien se grafica un box plot por año, para ver si la variancia es constante.
 
-```{r, fig.width=7, fig.height=4}
+```{r, out.width="100%"}
 ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
   geom_boxplot(fill = "cyan4") +
   labs(title = "Boxplot de Valores Anuales", 
@@ -91,7 +91,7 @@ ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
        y = "Indice 2004 = 100") +
   theme_minimal()
 ```
-Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion gráfica, como no tenemos certeza realizamos el grafico de Box y Cox para probar posibles transformaicones
+Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion gráfica, como no tenemos certeza realizamos el gráfico de Box y Cox para probar posibles transformaicones
 
 
 ## Transformación
@@ -116,13 +116,13 @@ ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_transformed)) +
   labs(title = "Boxplot de Valores anuale", x = "Year", y = 'Indice 2004 = 100') +
   theme_minimal() # no tiene variancia constante
 ```
-Como mencionamos anteriormente, esta transformación solo parece cambiar la escala pero no la forma de la variancia anual, por lo que continuaremos nuestro trabajo con la serie original.
+Como mencionamos anteriormente, esta transformación solo parece cambiar la escala pero no la forma de la variancia anual, por lo que continuaremos nuestro trabajo con la **serie original**.
 
 ## Diferenciaciones
 
 Al analizar la serie temporal del EMAE, observamos un patrón de estacionalidad recurrente, donde las fluctuaciones anuales se mantienen consistentemente a lo largo del tiempo. Para abordar este comportamiento y trabajar con una serie estacionaria (requisito fundamental para los modelos ARIMA), decidimos aplicar una diferenciación estacional. Este proceso nos permite eliminar los componentes estacionales y centrar nuestro análisis en las variaciones más relevantes de la tendencia y los ciclos.
 
-```{r}
+```{r, out.width="100%"}
 emae_mensual_ts %>% 
   gg_tsdisplay(difference(emae_original, 12), 
                plot_type='partial',
@@ -175,26 +175,12 @@ if (NOTFIT) {
   message("Modelo fit_original ajustado y guardado en \fitted.")
 }
 
-# # Ajuste y guardado de fit_transformed
-# if (NOTFIT) {
-#   fit_transformed <- readRDS(fit_transformed_file)
-#   message("Modelo fit_transformed cargado desde el archivo.")
-# } else {
-#   fit_transformed <- emae_mensual_ts %>% 
-#     model(
-#       arima11_t = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(1,1,0)),
-#       arima11_t_2 = ARIMA(emae_transformed ~ pdq(1,0,0) + PDQ(2,1,0)),
-#       auto_trans = ARIMA(emae_transformed, stepwise = FALSE, approx = FALSE),
-#       auto_trans_2 = ARIMA(emae_transformed, stepwise = TRUE, approx = TRUE)
-#     )
-#   saveRDS(fit_transformed, fit_transformed_file)
-#   message("Modelo fit_transformed ajustado y guardado en el archivo.")
-# }
-
-fit_original |> pivot_longer(everything(), names_to = "Model name",
+kable(
+  fit_original |> pivot_longer(everything(), names_to = "Model name",
                     values_to = "Orders")
+  )
 
-glance(fit_original)
+kable(glance(fit_original))
 ```
 
 De la tabla presentada, obtenemos las siguientes observaciones clave:
@@ -208,18 +194,25 @@ A partir de estas conclusiones, trabajaremos con ambos modelos ($SARIMA(0,1,2)(2
 
 ### Modelos
 
+Presentamos los coeficientes $\theta$, $\Theta$, $\phi$ y $\Phi$ estimados 
 ```{r}
 # Extraer parámetros de los modelos ajustados
-fit_original %>%
+kable(
+  fit_original %>%
   tidy() %>%  # Extraer parámetros en formato legible
   select(.model, term, estimate)%>%
   filter(.model %in% c("auto", "arima11_2"))
+  )
 ```
 Los modelos estimados con los que trabajaremos se notan como:
 
-$$ SARIMA(1,0,0)(2,1,0)_{(12)} \Rightarrow (1-0,92B)(1+0,5B^{12}+0,29B^{13})(1-B^{12})Z_t=a_t $$
-$$ SARIMA(0,1,2)(2,1,2)_{12} \Rightarrow  (1-0,79B^{12}+0,42B^{13})(1-B)(1-B^{12})Z_t=(1-0,97B+0,96B^2)(1+1,46B^{12}-0,69B^{13})a_t  $$
-Para cerrar esta sección se presenta un grafico interactivo que nos permite dilusidar lo parecido y lo preciso de ambos modelos para los ultimos 4 años.
+* $SARIMA(1,0,0)(2,1,0)_{(12)}$ al que llamaremos de ahora en más **modelo manual**
+
+$$(1-0,92B)(1+0,5B^{12}+0,29B^{13})(1-B^{12})Z_t=a_t $$
+* $ SARIMA(0,1,2)(2,1,2)_{12} $ al que llamaremos de ahora en más **modelo automático**
+
+$$ (1-0,79B^{12}+0,42B^{13})(1-B)(1-B^{12})Z_t=(1-0,97B+0,96B^2)(1+1,46B^{12}-0,69B^{13})a_t  $$
+Para cerrar esta sección, presentamos un gráfico interactivo que permite analizar la similitud y precisión de ambos modelos ajustados. Con el objetivo de facilitar la interpretación visual, se se incluyen únicamente los datos correspondientes a los últimos cuatro años para destacar patrones recientes y poder comparar claramente.
 
 ```{r}
 fitted_values <- fit_original %>%
@@ -264,9 +257,11 @@ Antes de proceder con las predicciones, es fundamental verificar que los residuo
 
 4. $a_t \sim N(0,\sigma_a^2)$.Los residuos deben seguir una distribución asintóticamente Normal.
 
+## Esperanza y Variancia de los residuos
+
 Comenzaremos con un gráfico de Residuos vs Timepo para comprobar esperanza y variancia constante
 
-```{r}
+```{r, out.width="100%"}
 #TODO: Hace falta ver errores standard?
 
 # Extraer los residuos del modelo "auto"
@@ -277,19 +272,19 @@ residuos2 <- residuals(fit_original, type = "response") %>%
 
 # Graficar los residuos vs tiempo
 g1 <- ggplot(residuos1, aes(x = periodo, y = .resid)) +
-  geom_point(color = "cyan4") +
+  geom_point(color = "purple4") +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
   labs(
-    title = "Residuos SARIMA(0,1,2)(2,1,2)[12]",
+    title = "Residuos Modelo Automatico",
     x = "",
     y = "Residuos"
   ) +
   theme_minimal()
 g2 <- ggplot(residuos2, aes(x = periodo, y = .resid)) +
-  geom_point(color = "cyan4") +
+  geom_point(color = "green4") +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
   labs(
-    title = "Residuos SARIMA(1,0,0)(2,1,0)[12]",
+    title = "Residuos Modelo Manual",
     x = "",
     y = "Residuos"
   ) +
@@ -297,60 +292,79 @@ g2 <- ggplot(residuos2, aes(x = periodo, y = .resid)) +
 g1+g2
 ```
 
-Vemos aqui marcados outliers en Marzo y Abril 2020, inicio de la pandemia causada por el covid-19. Obviando estos valores, los residuos parecen tener variancia constantes y estar centrados en cero.
+Se observan valores atípicos evidentes en marzo y abril de 2020, correspondientes al inicio de la pandemia de COVID-19. Excluyendo estos puntos, los residuos del modelo automático parecen mostrar una varianza constante. En el caso del modelo identificado "manualmente," se aprecia un ligero incremento en la varianza que, sin embargo, podríamos despreciar. Esta estabilidad en los residuos nos habla de dosbuenos ajustes.
 
-Continuamos nuestro analisis con el mas importante de los supuestos. Miraremos el grafico de autocorrelacion para los residuos, esperando que estos esten incorrelados
+## Independencia de los Residuos
 
-```{r}
+Continuamos nuestro análisis con uno el más importante de los supuestos, la incorrelación de los residuos. Para evaluarlo, observamos los gráficos de autocorrelación (FAC) de los residuos de ambos modelos.
+
+```{r, out.width="100%"}
 # Gráfico de autocorrelación para los residuos
-r1 <- acf(residuos1$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
-r2 <- acf(residuos2$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
-# Convertir autocorrelaciones en un DataFrame para graficarlas con ggplot
-# acf_data <- acf(residuos$.resid, plot = FALSE)
-# acf_df <- data.frame(
-#   Lag = acf_data$lag,
-#   ACF = acf_data$acf
-# )
-# 
-# # Graficar autocorrelación con ggplot
-# acf_plot <- ggplot(acf_df, aes(x = Lag, y = ACF)) +
-#   geom_bar(stat = "identity", fill = "blue", alpha = 0.7) +
-#   geom_hline(yintercept = 0, color = "black") +
-#   geom_hline(yintercept = c(-1.96 / sqrt(length(residuos$.resid)), 
-#                             1.96 / sqrt(length(residuos$.resid))), 
-#              linetype = "dashed", color = "red") +
-#   labs(
-#     title = "Autocorrelación de los residuos",
-#     x = "Desfase (Lag)",
-#     y = "Autocorrelación"
-#   ) +
-#   theme_minimal()
-# r1+r2
-#TODO: ya descarto el modelo?
+# acf(residuos1$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
+# acf(residuos2$.resid, main = "Autocorrelación de los residuos", lag.max = 48)
+
+acf1_data <- acf(residuos1$.resid, plot = FALSE)
+acf2_data <- acf(residuos2$.resid, plot = FALSE)
+acf_df <- data.frame(
+  Lag1 = acf1_data$lag,
+  ACF1 = acf1_data$acf,
+  Lag2 = acf2_data$lag,
+  ACF2 = acf2_data$acf
+)
+
+# Graficar autocorrelación con ggplot
+r1 <- ggplot(acf_df, aes(x = Lag1, y = ACF1)) +
+  geom_bar(stat = "identity", fill = "purple4", alpha = 0.7, width = 0.2) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = c(-1.96 / sqrt(length(residuos1$.resid)),
+                            1.96 / sqrt(length(residuos1$.resid))),
+             linetype = "dashed", color = "red") +
+  labs(title = "Autocorrelación Modelo Automatico", 
+       x = "Lags",
+       y = "Autocorrelación de residuos") +
+  theme_minimal()
+r2 <- ggplot(acf_df, aes(x = Lag2, y = ACF2)) +
+  geom_bar(stat = "identity", fill = "green4", alpha = 0.7, width = 0.2) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = c(-1.96 / sqrt(length(residuos2$.resid)),
+                            1.96 / sqrt(length(residuos2$.resid))),
+             linetype = "dashed", color = "red") +
+  labs(title = "Autocorrelación Modelo Manual", 
+       x = "Lags",
+       y = "Autocorrelación de residuos") +
+  theme_minimal()
+r1+r2
+#TODO: indica errores correlacionas para la parte estacional?
 ```
+En el caso del modelo automático, la FAC muestra un comportamiento consistente con un *ruido blanco*, con la excepción de un bastón significativo en un rezago mayor al 20. Esto sugiere que, en general, los residuos están incorrelados.
+
+Por otro lado, la FAC de los residuos del modelo identificado manualmente revela varios rezagos significativos antes del lag 15, lo que indica que estos residuos no se comportan completamente como un *ruido blanco*. Este hallazgo podría reflejar deficiencias en el ajuste de este modelo, especialmente al momento de realizar predicciones.
 
 ```{r}
-#TODO: test para los rezagos
+#TODO: yo aca ya descartaria el modelo manual
+#TODO: test test de ljung box para los rezagos
 
 ```
 
-Como podemos observar, los residuos son ruido blanco, por lo que solo nos queda comprobar el supuesto de distribución asintotica normal para poder realizar intervalos de confianza a nuestras predicciones
+## Normalidad de los Residuos
 
-```{r}
+Finalmente, observamos un histograma y un Q-Q plot de los residuos para evaluar su proximidad a una distribución normal. 
+
+```{r, out.width="100%"}
 # Histograma de los residuos
-h <- ggplot(residuos1, aes(x = .resid)) +
-  geom_histogram(aes(y = ..density..), bins = 30, fill = "cyan4", alpha = 0.7) +
+h1 <- ggplot(residuos1, aes(x = .resid)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "purple4", alpha = 0.7) +
   geom_density(color = "red", size = 1) +
   labs(
-    title = "Histograma de los residuos",
+    title = "Histograma de los residuos modelo automatico",
     x = "Residuos",
     y = "Densidad"
   ) +
   theme_minimal()
 
 # QQ-Plot normal
-qq <- ggplot(residuos1, aes(sample = .resid)) +
-  stat_qq(color = "cyan4") +
+qq1 <- ggplot(residuos1, aes(sample = .resid)) +
+  stat_qq(color = "purple4") +
   stat_qq_line(color = "red", linetype = "dashed") +
   labs(
     title = "QQ-Plot de los residuos",
@@ -359,34 +373,102 @@ qq <- ggplot(residuos1, aes(sample = .resid)) +
   ) +
   theme_minimal()
 
-h/qq
+h1/qq1
 ```
-Vemos que a causa de los outliers la distribución de los residuos es asimétrica
-
+Si bien identificamos la presencia de outliers (Marzo y Abril de 2020), los cuales desvían la distribución de los residuos de la normalidad, esto no es motivo de preocupación ya que el supuesto de normalidad no es estrictamente necesario para la calidad del modelo. Utilizamos este supuesto para construir intervalos de confianza en nuestras prediccione, por lo que continuaremos con nuestro **modelo automatico** ajustado.
 
 
 # Predicción
 
+Una vez seleccionado el modelo más adecuado y comprobados los supuestos estadísticos, avanzamos a la parte más enriquecedora de nuestro análisis: la predicción.
+
+En esta sección, presentamos las predicciones generadas para los meses de enero a agosto de 2024. Compararemos estas proyecciones con los valores reales observados en dicho período, permitiéndonos evaluar el desempeño y la eficiencia de nuestro modelo ajustado.
+
+Este análisis no solo nos proporcionará una medida de la precisión del modelo, sino que también permitirá identificar posibles ajustes o mejoras que podrían ser necesarios en futuros escenarios.
+
 ```{r}
-f <- forecast(fit_original, h = 8) |>
-  filter(.model == 'auto') |>
-  autoplot(emae_mensual_ts) + # Asegúrate de que emae_mensual_ts sea tu serie original
-  autolayer(emae_mensual_ts, series = "Serie Original", color = "cyan4") + # Añade la serie original
+# Filtramos los datos recientes
+emae_mensual_ts_recent <- emae_mensual_ts |> 
+  filter(periodo >= as.Date("2021-06-01"))  
+
+# Forecast
+f1 <- forecast(fit_original, h = 8) |>
+  filter(.model == 'auto')
+f2 <- forecast(fit_original, h = 8) |>
+  filter(.model == 'arima11_2')
+
+values_to_predict_df <- data.frame(
+  periodo = seq(from = as.Date("2024-01-01"), by = "month", length.out = length(values_to_predict)),
+  values = values_to_predict
+)
+
+# Gráfico
+g <- ggplot(emae_mensual_ts_recent, aes(x = periodo, y = emae_original)) + 
+  geom_line(aes(color = "Serie Original"), size = 1) + # Serie original
+  geom_line(data = as.data.frame(f1), aes(x = periodo, y = .mean, color = "Predicción Auto"), size = 1) + # Predicción automática
+  geom_line(data = as.data.frame(f2), aes(x = periodo, y = .mean, color = "Predicción Manual"), size = 1) + # Predicción manual
+  geom_point(data = values_to_predict_df, 
+             aes(x = periodo, y = values, color = "Valores Reales"), 
+             size = 2) + # Valores reales
   labs(
-    title = "EMAE con predicciones del modelo ARIMA",
-    y = "Número de personas (millones)",
+    title = "EMAE con predicciones y valores reales",
+    y = "Índice (2004 = 100)",
+    x = "",
+    color = "Leyenda"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c(
+    "Serie Original" = "cyan4", 
+    "Predicción Auto" = "purple4", 
+    "Predicción Manual" = "green4", 
+    "Valores Reales" = "cyan4"
+  ))
+ggplotly(g)
+```
+
+
+```{r}
+# Gráfico
+g <- autoplot(emae_mensual_ts_recent) + 
+  autolayer(f1, series = "Predicción", color = "purple4") + 
+  autolayer(emae_mensual_ts_recent, series = "Serie Original", color = "cyan4") + 
+  geom_point(data = values_to_predict_df, aes(x = periodo, y = values), color = "cyan4", size = 2, shape = 18) + # Valores reales
+  labs(
+    title = "EMAE con predicciones del modelo automático y valores reales",
+    y = "Índice (2004 = 100)",
     x = "Tiempo"
   ) +
   theme_minimal() +
   theme(legend.title = element_blank())
-f
+g
 ```
 
 ```{r}
 #TODO: Comparo dos modelos?
 ```
 
+## Medidas de error
+
+Para evaluar y comparar las predicciones de nuestros modelos utilizaremos el **MAPE (Mean Absolute Percentage Error)**. Este representa el promedio del error absoluto en términos porcentuales respecto a los valores reales, indica, en promedio, cuánto se desvió porcentualmente el modelo de los valores reales.
+
+La fórmula del MAPE es:
+
+$$
+MAPE = \frac{1}{M} \sum_{l=1}^M \left| \frac{e_l}{Z_{n+l}} \right| \times 100
+$$
+Donde:
+
+* $e_l =Z_{n+l} - \hat{z_n(l)}$  error de la predicción.
+
+Un MAPE bajo indica un buen rendimiento, pero esta métrica puede ser sensible a valores reales cercanos a cero, lo que puede inflar el porcentaje de error, por esto la acompañaremos con el **MSE (Mean Square Error)**.
+
+```{r}
+#TODO: calcular mape
+```
+
+
 # Discusión
+
 
 # Bibliografia
 
