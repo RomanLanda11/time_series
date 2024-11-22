@@ -540,5 +540,3 @@ Tanto en la cátedra como en este trabajo nos basamos el los libros:
 * [Forecasting: Principles and Practice (3rd ed)](https://otexts.com/fpp3/) de Rob J Hyndman and George Athanasopoulos
 
 * Time Series Analysis: Univariate and Multivariate Methods (2nd er) de Wiliam Wei
-
-commit prueba
