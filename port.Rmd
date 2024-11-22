@@ -51,7 +51,20 @@ emae_mensual <- read.csv("https://infra.datos.gob.ar/catalog/sspm/dataset/143/di
 emae_mensual$indice_tiempo <- as.Date(emae_mensual$indice_tiempo, format = "%Y-%m-%d") 
 emae_mensual$year <- year(emae_mensual$indice_tiempo)
 emae_mensual$periodo <- format(emae_mensual$indice_tiempo, "%Y-%m")
-kable(tail(emae_mensual))
+# Filtrar por si publican nuevos valores
+emae_mensual <- emae_mensual %>%
+  filter(periodo <= "2024-08") %>% 
+  select(-c(emae_tendencia_ciclo, 
+            emae_original_via, 
+            emae_desestacionalizada_vm, 
+            emae_tendencia_ciclo_vm))
+
+kable(tail(emae_mensual), 
+      format = "html", 
+      table.attr = "class='table table-striped'") %>%
+  kable_styling() %>%
+  row_spec(0, bold = T, background = "cyan4", color = "white")
+
 ```
 
 
@@ -70,6 +83,8 @@ emae_mensual_ts <- emae_mensual %>%
 ```
 
 # Identificación de Serie
+
+***AVISO: puede cliquear los gráficos para ampliarlos***
 
 En primer instancia querremos usar nuestros conocimientos para identificar un modelo que ajuste correctamente a nuestros datos de forma "manual". Es por esto que comenzamos observando la evolución del EMAE en el tiempo (con base 100 al inicio de 2004)
 
@@ -105,7 +120,6 @@ boxcox(lm(data = emae_mensual_ts, emae_original ~ 1),
        lambda = seq(-3, 8, by = 0.5))
 ```
 ```{r}
-# Parámetro lambda
 lambda <- 3
 # Aplicar la transformación
 emae_mensual_ts <- emae_mensual_ts %>%
@@ -115,6 +129,7 @@ ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_transformed)) +
   geom_boxplot(fill="cyan4") +
   labs(title = "Boxplot de Valores anuale", x = "Year", y = 'Indice 2004 = 100') +
   theme_minimal() # no tiene variancia constante
+
 ```
 Como mencionamos anteriormente, esta transformación solo parece cambiar la escala pero no la forma de la variancia anual, por lo que continuaremos nuestro trabajo con la **serie original**.
 
@@ -175,12 +190,25 @@ if (NOTFIT) {
   message("Modelo fit_original ajustado y guardado en \fitted.")
 }
 
-kable(
-  fit_original |> pivot_longer(everything(), names_to = "Model name",
-                    values_to = "Orders")
-  )
 
-kable(glance(fit_original))
+df_fit <- as.data.frame(fit_original %>% 
+                           pivot_longer(everything(),
+                                        names_to = "Model name",
+                                        values_to ="Orders"))  
+kable(df_fit,
+      format = "html", 
+      table.attr = "class='table table-striped'") %>%
+  kable_styling() %>%
+  row_spec(0, bold = T, background = "cyan4", color = "white")
+
+glance_summary <- glance(fit_original) %>%
+  select(.model, sigma2, log_lik, AIC, AICc, BIC)
+
+kable(as.data.frame(glance_summary), 
+      format = "html", 
+      table.attr = "class='table table-striped'") %>%
+  kable_styling() %>%
+  row_spec(0, bold = T, background = "cyan4", color = "white")
 ```
 
 De la tabla presentada, obtenemos las siguientes observaciones clave:
@@ -196,22 +224,26 @@ A partir de estas conclusiones, trabajaremos con ambos modelos ($SARIMA(0,1,2)(2
 
 Presentamos los coeficientes $\theta$, $\Theta$, $\phi$ y $\Phi$ estimados 
 ```{r}
-# Extraer parámetros de los modelos ajustados
-kable(
-  fit_original %>%
-  tidy() %>%  # Extraer parámetros en formato legible
-  select(.model, term, estimate)%>%
-  filter(.model %in% c("auto", "arima11_2"))
-  )
+params_df <- as.data.frame(fit_original %>%
+                              tidy() %>%  
+                              select(.model, term, estimate)%>%
+                              filter(.model %in% c("auto", "arima11_2"))
+                          )
+
+kable(as.data.frame(params_df), 
+      format = "html", 
+      table.attr = "class='table table-striped'") %>%
+  kable_styling() %>%
+  row_spec(0, bold = T, background = "cyan4", color = "white")
 ```
 Los modelos estimados con los que trabajaremos se notan como:
 
 * $SARIMA(1,0,0)(2,1,0)_{(12)}$ al que llamaremos de ahora en más **modelo manual**
 
 $$(1-0,92B)(1+0,5B^{12}+0,29B^{13})(1-B^{12})Z_t=a_t $$
-* $ SARIMA(0,1,2)(2,1,2)_{12} $ al que llamaremos de ahora en más **modelo automático**
+* $SARIMA(0,1,2)(2,1,2)_{12}$ al que llamaremos de ahora en más **modelo automático**
 
-$$ (1-0,79B^{12}+0,42B^{13})(1-B)(1-B^{12})Z_t=(1-0,97B+0,96B^2)(1+1,46B^{12}-0,69B^{13})a_t  $$
+$$(1-0,79B^{12}+0,42B^{13})(1-B)(1-B^{12})Z_t=(1-0,97B+0,96B^2)(1+1,46B^{12}-0,69B^{13})a_t$$
 Para cerrar esta sección, presentamos un gráfico interactivo que permite analizar la similitud y precisión de ambos modelos ajustados. Con el objetivo de facilitar la interpretación visual, se se incluyen únicamente los datos correspondientes a los últimos cuatro años para destacar patrones recientes y poder comparar claramente.
 
 ```{r}
@@ -240,7 +272,7 @@ g <- ggplot(data = fitted_values_filtered, aes(x = periodo_date)) +
     color = "Leyenda"
   ) +
   theme_minimal() +
-  scale_color_manual(values = c("Serie Original" = "cyan4", "arima11_2" = "green4", "auto" = "purple4"))
+  scale_color_manual(values = c("Serie Original" = "cyan4", "arima11_2" = "#009933", "auto" = "#9933CC"))
 ggplotly(g)
 ```
 
@@ -262,8 +294,6 @@ Antes de proceder con las predicciones, es fundamental verificar que los residuo
 Comenzaremos con un gráfico de Residuos vs Timepo para comprobar esperanza y variancia constante
 
 ```{r, out.width="100%"}
-#TODO: Hace falta ver errores standard?
-
 # Extraer los residuos del modelo "auto"
 residuos1 <- residuals(fit_original, type = "response") %>%
   filter(.model == "auto")  #  modelo "auto"
@@ -272,7 +302,7 @@ residuos2 <- residuals(fit_original, type = "response") %>%
 
 # Graficar los residuos vs tiempo
 g1 <- ggplot(residuos1, aes(x = periodo, y = .resid)) +
-  geom_point(color = "purple4") +
+  geom_point(color = "#9933CC") +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
   labs(
     title = "Residuos Modelo Automatico",
@@ -281,7 +311,7 @@ g1 <- ggplot(residuos1, aes(x = periodo, y = .resid)) +
   ) +
   theme_minimal()
 g2 <- ggplot(residuos2, aes(x = periodo, y = .resid)) +
-  geom_point(color = "green4") +
+  geom_point(color = "#009933") +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
   labs(
     title = "Residuos Modelo Manual",
@@ -314,7 +344,7 @@ acf_df <- data.frame(
 
 # Graficar autocorrelación con ggplot
 r1 <- ggplot(acf_df, aes(x = Lag1, y = ACF1)) +
-  geom_bar(stat = "identity", fill = "purple4", alpha = 0.7, width = 0.2) +
+  geom_bar(stat = "identity", fill = "#9933CC", alpha = 0.7, width = 0.2) +
   geom_hline(yintercept = 0, color = "black") +
   geom_hline(yintercept = c(-1.96 / sqrt(length(residuos1$.resid)),
                             1.96 / sqrt(length(residuos1$.resid))),
@@ -324,7 +354,7 @@ r1 <- ggplot(acf_df, aes(x = Lag1, y = ACF1)) +
        y = "Autocorrelación de residuos") +
   theme_minimal()
 r2 <- ggplot(acf_df, aes(x = Lag2, y = ACF2)) +
-  geom_bar(stat = "identity", fill = "green4", alpha = 0.7, width = 0.2) +
+  geom_bar(stat = "identity", fill = "#009933", alpha = 0.7, width = 0.2) +
   geom_hline(yintercept = 0, color = "black") +
   geom_hline(yintercept = c(-1.96 / sqrt(length(residuos2$.resid)),
                             1.96 / sqrt(length(residuos2$.resid))),
@@ -336,14 +366,13 @@ r2 <- ggplot(acf_df, aes(x = Lag2, y = ACF2)) +
 r1+r2
 #TODO: indica errores correlacionas para la parte estacional?
 ```
+
 En el caso del modelo automático, la FAC muestra un comportamiento consistente con un *ruido blanco*, con la excepción de un bastón significativo en un rezago mayor al 20. Esto sugiere que, en general, los residuos están incorrelados.
 
 Por otro lado, la FAC de los residuos del modelo identificado manualmente revela varios rezagos significativos antes del lag 15, lo que indica que estos residuos no se comportan completamente como un *ruido blanco*. Este hallazgo podría reflejar deficiencias en el ajuste de este modelo, especialmente al momento de realizar predicciones.
 
 ```{r}
-#TODO: yo aca ya descartaria el modelo manual
 #TODO: test test de ljung box para los rezagos
-
 ```
 
 ## Normalidad de los Residuos
@@ -353,10 +382,10 @@ Finalmente, observamos un histograma y un Q-Q plot de los residuos para evaluar 
 ```{r, out.width="100%"}
 # Histograma de los residuos
 h1 <- ggplot(residuos1, aes(x = .resid)) +
-  geom_histogram(aes(y = ..density..), bins = 30, fill = "purple4", alpha = 0.7) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "#9933CC", alpha = 0.7) +
   geom_density(color = "red", size = 1) +
   labs(
-    title = "Histograma de los residuos modelo automatico",
+    title = "Histograma de modelo automatico",
     x = "Residuos",
     y = "Densidad"
   ) +
@@ -364,18 +393,39 @@ h1 <- ggplot(residuos1, aes(x = .resid)) +
 
 # QQ-Plot normal
 qq1 <- ggplot(residuos1, aes(sample = .resid)) +
-  stat_qq(color = "purple4") +
+  stat_qq(color = "#9933CC") +
   stat_qq_line(color = "red", linetype = "dashed") +
   labs(
     title = "QQ-Plot de los residuos",
-    x = "Cuantiles teóricos",
+    x = "Cuantiles teoricos",
     y = "Cuantiles de los residuos"
   ) +
   theme_minimal()
 
-h1/qq1
+h2 <- ggplot(residuos2, aes(x = .resid)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "#009933", alpha = 0.7) +
+  geom_density(color = "red", size = 1) +
+  labs(
+    title = "Histograma de modelo manual",
+    x = "Residuos",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+
+# QQ-Plot normal
+qq2 <- ggplot(residuos2, aes(sample = .resid)) +
+  stat_qq(color = "#009933") +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  labs(
+    title = "QQ-Plot de los residuos",
+    x = "Cuantiles teoricos",
+    y = "Cuantiles de los residuos"
+  ) +
+  theme_minimal()
+
+(h1+h2) / (qq1+qq2)
 ```
-Si bien identificamos la presencia de outliers (Marzo y Abril de 2020), los cuales desvían la distribución de los residuos de la normalidad, esto no es motivo de preocupación ya que el supuesto de normalidad no es estrictamente necesario para la calidad del modelo. Utilizamos este supuesto para construir intervalos de confianza en nuestras prediccione, por lo que continuaremos con nuestro **modelo automatico** ajustado.
+Si bien identificamos la presencia de outliers (Marzo y Abril de 2020), los cuales desvían la distribución de los residuos de la normalidad, esto no es motivo de preocupación ya que el supuesto de normalidad no es estrictamente necesario para la calidad del modelo. Utilizamos este supuesto para construir intervalos de confianza en nuestras prediccione.
 
 
 # Predicción
@@ -385,6 +435,7 @@ Una vez seleccionado el modelo más adecuado y comprobados los supuestos estadí
 En esta sección, presentamos las predicciones generadas para los meses de enero a agosto de 2024. Compararemos estas proyecciones con los valores reales observados en dicho período, permitiéndonos evaluar el desempeño y la eficiencia de nuestro modelo ajustado.
 
 Este análisis no solo nos proporcionará una medida de la precisión del modelo, sino que también permitirá identificar posibles ajustes o mejoras que podrían ser necesarios en futuros escenarios.
+
 
 ```{r}
 # Filtramos los datos recientes
@@ -403,49 +454,32 @@ values_to_predict_df <- data.frame(
 )
 
 # Gráfico
-g <- ggplot(emae_mensual_ts_recent, aes(x = periodo, y = emae_original)) + 
-  geom_line(aes(color = "Serie Original"), size = 1) + # Serie original
-  geom_line(data = as.data.frame(f1), aes(x = periodo, y = .mean, color = "Predicción Auto"), size = 1) + # Predicción automática
-  geom_line(data = as.data.frame(f2), aes(x = periodo, y = .mean, color = "Predicción Manual"), size = 1) + # Predicción manual
-  geom_point(data = values_to_predict_df, 
-             aes(x = periodo, y = values, color = "Valores Reales"), 
-             size = 2) + # Valores reales
-  labs(
-    title = "EMAE con predicciones y valores reales",
-    y = "Índice (2004 = 100)",
-    x = "",
-    color = "Leyenda"
-  ) +
-  theme_minimal() +
-  scale_color_manual(values = c(
-    "Serie Original" = "cyan4", 
-    "Predicción Auto" = "purple4", 
-    "Predicción Manual" = "green4", 
-    "Valores Reales" = "cyan4"
-  ))
-ggplotly(g)
-```
-
-
-```{r}
-# Gráfico
-g <- autoplot(emae_mensual_ts_recent) + 
-  autolayer(f1, series = "Predicción", color = "purple4") + 
+g1 <- autoplot(emae_mensual_ts_recent) + 
+  autolayer(f1, series = "Prediccion", color = "#9933CC") + 
   autolayer(emae_mensual_ts_recent, series = "Serie Original", color = "cyan4") + 
   geom_point(data = values_to_predict_df, aes(x = periodo, y = values), color = "cyan4", size = 2, shape = 18) + # Valores reales
   labs(
     title = "EMAE con predicciones del modelo automático y valores reales",
-    y = "Índice (2004 = 100)",
-    x = "Tiempo"
+    y = "Indice (2004 = 100)",
+    x = ""
   ) +
   theme_minimal() +
   theme(legend.title = element_blank())
-g
+g2 <- autoplot(emae_mensual_ts_recent) + 
+  autolayer(f2, series = "Prediccion", color = "#009933") + 
+  autolayer(emae_mensual_ts_recent, series = "Serie Original", color = "cyan4") + 
+  geom_point(data = values_to_predict_df, aes(x = periodo, y = values), color = "cyan4", size = 2, shape = 18) + # Valores reales
+  labs(
+    title = "EMAE con predicciones del modelo manual y valores reales",
+    y = "Indice (2004 = 100)",
+    x = ""
+  ) +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+g1/g2
 ```
 
-```{r}
-#TODO: Comparo dos modelos?
-```
+
 
 ## Medidas de error
 
@@ -462,13 +496,42 @@ Donde:
 
 Un MAPE bajo indica un buen rendimiento, pero esta métrica puede ser sensible a valores reales cercanos a cero, lo que puede inflar el porcentaje de error, por esto la acompañaremos con el **MSE (Mean Square Error)**.
 
+Utilizamos las funciones **MAPE** y **MSE** de la libreria *MLmetrics*
+
 ```{r}
-#TODO: calcular mape
+mape_auto <- round(MAPE(y_pred = values_to_predict, y_true = f1$.mean)*100,2)
+mse_auto <- MSE(y_pred = values_to_predict, y_true = f1$.mean)
+mape_manual <- round(MAPE(y_pred = values_to_predict, y_true = f2$.mean)*100,2)
+mse_manual <- MSE(y_pred = values_to_predict, y_true = f2$.mean)
+
+metricas <- data.frame(
+  Modelo = c("Automático", "Manual"),
+  MAPE = c(mape_auto, mape_manual),
+  MSE = c(mse_auto, mse_manual)
+)
+
+# Mostrar como tabla con kable
+kable(metricas, 
+      col.names = c("Modelo", "MAPE", "MSE"), 
+      caption = "Metricas para comparar modelos", 
+      format = "html", 
+      table.attr = "class='table table-striped'") %>%
+  kable_styling() %>%
+  row_spec(0, bold = T) %>%
+  row_spec(1, bold = T, background = "#9933CC", color = "white") %>%
+  row_spec(2, bold = T, background = "#009933", color = "white")
 ```
 
+Obervando estas metricas podemos decir que ambos modelos muestran un excelente ajuste a los datos originales. En promedio, los modelos se equivocan en apenas por encima del 2% al realizar predicciones, lo cual nos habla de una gran precisión predictiva.
+Podemos decir que cualquiermodelo es confiables para la predicción, siendo el modelo identificado "a ojo" más preciso y más parsimonioso.
+
+Es importante destacar que, si bien estamos prediciendo valores desconocidos para la serie, estos no son desconocidos para nosotros. Podríamos haber entrenado el modelo con datos hasta Agosto de 2024 y realizar predicciones para los valores futuros del EMAE.
 
 # Discusión
 
+Como vimos en la sección anterior, el modelo con mejor desempeño en términos de predicción fue el $SARIMA(1,0,0)(2,1,0)_{12}$ estimado manualmente. Sin embargo, si nos remitimos a la comprobación de supuestos presentada en la sección [Diagnóstico del modelo](#Diagnóstico-del-modelo), podemos recordar que este modelo no cumple completamente con el supuesto de errores incorrelados. Por ello, resulta razonable inclinarse por el modelo $SARIMA(0,1,2)(2,1,2)_{12}$ ajustado automáticamente, el cual, aunque tenga un rendimiento predictivo ligeramente inferior, respeta los supuestos fundamentales del análisis.
+
+En un contexto donde la ciencia de datos y las técnicas modernas como el machine learning están en auge, es común que ciertos detalles estadísticos, como la verificación de supuestos, sean pasados por alto. Sin embargo, es crucial recordar que estas técnicas están profundamente enraizadas en la estadística, y que una interpretación sólida requiere no solo optimizar la predicción, sino también mantener un análisis crítico y respetar las bases que sustentan nuestros modelos. Este enfoque no solo asegura resultados más confiables, sino que también contribuye a la robustez y replicabilidad de nuestras conclusiones.
 
 # Bibliografia
 
