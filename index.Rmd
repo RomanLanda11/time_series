@@ -4,7 +4,7 @@ author: "LANDA, Román"
 date: "2024-11-21"
 output:
   rmdformats::material:
-    self_contained: true
+    self_contained: false
     code_folding: hide
     lightbox: true
     thumbnails: true
