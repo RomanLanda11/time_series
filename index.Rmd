@@ -24,13 +24,11 @@ knitr::opts_chunk$set(
 
 # Intrducción
 
-El Estimador mensual de actividad económica (EMAE) refleja la evolución mensual de la actividad económica del conjunto de los sectores productivos a nivel nacional. Este es un indicador provisorio de la evolución del PIB a precios constantes de 2004 que será difundido con un rezago de 50 a 60 días de concluido el mes de referencia.
+El Estimador Mensual de Actividad Económica (EMAE) refleja la evolución mensual de la actividad económica del conjunto de los sectores productivos a nivel nacional. Este es un indicador provisorio de la evolución del PIB a precios constantes de 2004 que será difundido con un rezago de 50 a 60 días de concluido el mes de referencia.
 
-El indicador es un índice Laspeyres que ofrece una pauta del comportamiento de la actividad económica real con 
-una frecuencia mayor a la del PIB trimestral a precios constantes. Su cálculo se estructura en la agregación del valor agregado a precios básicos de cada una de las actividades económicas más los impuestos netos de subsidios a los productos, utilizando las ponderaciones de las cuentas nacionales base 2004 de la República Argentina. Se trata de replicar los métodos de cálculo del PIB trimestral y/o anual, en la medida en que lo permite la disponibilidad de fuentes de información para un período más corto.
+El indicador es un índice Laspeyres que ofrece una pauta del comportamiento de la actividad económica real con una frecuencia mayor a la del PIB trimestral a precios constantes. Su cálculo se estructura en la agregación del valor agregado a precios básicos de cada una de las actividades económicas más los impuestos netos de subsidios a los productos, utilizando las ponderaciones de las cuentas nacionales base 2004 de la República Argentina. Se trata de replicar los métodos de cálculo del PIB trimestral y/o anual, en la medida en que lo permite la disponibilidad de fuentes de información para un período más corto.
 
-Es necesario enfatizar que el EMAE se elabora con información parcial, de carácter provisorio -dado que en algunos
-casos es corregida y/o completada por la fuente- o con indicadores alternativos a los que se utilizan para el cálculo trimestral, en tanto se han evaluado como adecuadas aproximaciones a éstos. Dado que la estimación del PIB trimestral reúne mayor cantidad de datos, por cerrarse y difundirse unos 30 días después que el EMAE, es habitual que se observen diferencias entre las variaciones trimestrales de ambos indicadores.
+Es necesario enfatizar que el EMAE se elabora con información parcial, de carácter provisorio -dado que en algunos casos es corregida y/o completada por la fuente- o con indicadores alternativos a los que se utilizan para el cálculo trimestral, en tanto se han evaluado como adecuadas aproximaciones a éstos. Dado que la estimación del PIB trimestral reúne mayor cantidad de datos, por cerrarse y difundirse unos 30 días después que el EMAE, es habitual que se observen diferencias entre las variaciones trimestrales de ambos indicadores.
 
 # Objetivo
 
@@ -39,7 +37,7 @@ El objetivo de este informe es aplicar de manera práctica las herramientas anal
 
 # Datos
 
-La API de Series de Tiempo de Argentina, permite consultar indicadores con evolución cronológica publicados en formatos abiertos por organismos de la Administración Pública Nacional. Haremos uso de dicha API para traeros la serie [EMAE. Base 2004](https://datos.gob.ar/series/api/series/?ids=143.3_NO_PR_2004_A_21)
+La API de Series de Tiempo de Argentina permite consultar indicadores con evolución cronológica publicados en formatos abiertos por organismos de la Administración Pública Nacional. Haremos uso de dicha API para traer la serie [EMAE. Base 2004](https://datos.gob.ar/series/api/series/?ids=143.3_NO_PR_2004_A_21)
 
 
 ```{r}
@@ -67,8 +65,7 @@ kable(tail(emae_mensual),
 
 ```
 
-
-Vemos que actualmente tenemos valores publicados hasta el mes de Agosto 2024. Decidimos guardaremos todos los meses de dicho año para luego comparar con nuestras predicicones
+Vemos que actualmente tenemos valores publicados hasta el mes de agosto de 2024. Decidimos guardar todos los meses de dicho año para luego comparar con nuestras predicciones.
 
 ```{r}
 values_to_predict <- tail(emae_mensual$emae_original, 8)
@@ -86,7 +83,7 @@ emae_mensual_ts <- emae_mensual %>%
 
 ***AVISO: puede cliquear los gráficos para ampliarlos***
 
-En primer instancia querremos usar nuestros conocimientos para identificar un modelo que ajuste correctamente a nuestros datos de forma "manual". Es por esto que comenzamos observando la evolución del EMAE en el tiempo (con base 100 al inicio de 2004)
+En primera instancia, queremos usar nuestros conocimientos para identificar un modelo que ajuste correctamente a nuestros datos de forma "manual". Es por esto que comenzamos observando la evolución del EMAE en el tiempo (con base 100 al inicio de 2004).
 
 ```{r, fig.width=5, fig.height=3}
 s1 <- ggplot(emae_mensual_ts, aes(x = indice_tiempo, y = emae_original)) + 
@@ -96,7 +93,7 @@ s1 <- ggplot(emae_mensual_ts, aes(x = indice_tiempo, y = emae_original)) +
 ggplotly(s1)
 ```
 
-Tambien se grafica un box plot por año, para ver si la variancia es constante.
+También se grafica un boxplot por año, para ver si la varianza es constante.
 
 ```{r, out.width="100%"}
 ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
@@ -106,13 +103,13 @@ ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_original)) +
        y = "Indice 2004 = 100") +
   theme_minimal()
 ```
-Si tenemo en cuenta los outlier la variancia luce parecida a lo largo de los años, pero esto es solo una aproximacion gráfica, como no tenemos certeza realizamos el gráfico de Box y Cox para probar posibles transformaicones
+Si tenemos en cuenta los outliers, la varianza luce parecida a lo largo de los años, pero esto es solo una aproximación gráfica. Como no tenemos certeza, realizamos el gráfico de Box y Cox para probar posibles transformaciones.
 
 
 ## Transformación
 
-Sabemos que una de las formas de estabilizar la variancia en nuestra serie es realizando alguna transformación como lo son la *logarítmica* o *cuadrática*. 
-Se probaron algunas transformaciones en la serie pero ninguna parecia tener una implicancia positiva en la estabilizacion de la variancia, por ello se decidió presentar la transformacion recomendad por el gráfico de Box y Cox solo a modo de ejemplo
+Sabemos que una de las formas de estabilizar la varianza en nuestra serie es realizando alguna transformación como lo son la *logarítmica* o *cuadrática*. 
+Se probaron algunas transformaciones en la serie, pero ninguna parecía tener una implicancia positiva en la estabilización de la varianza. Por ello, se decidió presentar la transformación recomendada por el gráfico de Box y Cox solo a modo de ejemplo.
 
 ```{r}
 boxcox(lm(data = emae_mensual_ts, emae_original ~ 1), 
@@ -131,7 +128,7 @@ ggplot(emae_mensual_ts, aes(x = year_factor, y = emae_transformed)) +
   theme_minimal() # no tiene variancia constante
 
 ```
-Como mencionamos anteriormente, esta transformación solo parece cambiar la escala pero no la forma de la variancia anual, por lo que continuaremos nuestro trabajo con la **serie original**.
+Como mencionamos anteriormente, esta transformación solo parece cambiar la escala, pero no la forma de la varianza anual, por lo que continuaremos nuestro trabajo con la **serie original**.
 
 ## Diferenciaciones
 
@@ -155,8 +152,7 @@ Para la parte estacional, observamos picos significativos en los rezagos 12 y 24
 
 * $ARIMA(2,1,0)$: Una extensión que podría reflejar interacciones adicionales entre rezagos.
 
-Finalmente, la selección del modelo se basará en criterios de ajuste como AIC, BIC y análisis de residuos para garantizar un balance la bondad de ajuste y lo parsimoñoso del modelo.
-
+Finalmente, la selección del modelo se basará en criterios de ajuste como AIC, BIC y análisis de residuos para garantizar un balance entre la bondad de ajuste y la parsimonia del modelo.
 
 ## Ajuste de la Serie
 
@@ -167,6 +163,7 @@ A partir del análisis previo de los gráficos de la FAC y la FACP, identificamo
 * **Modelos automáticos:** Exploraremos opciones generadas automáticamente mediante métodos de selección óptimos basados en criterios como AIC y BIC, que evalúan el balance entre la complejidad del modelo y su capacidad de predicción.
 
 De esta manera, compararemos los resultados de ambos enfoques para determinar cuál ofrece el mejor ajuste y predicción, siempre considerando la parsimonia y la calidad de los residuos.
+
 
 ```{r}
 # Definir nombres de archivo para guardar los modelos
@@ -223,6 +220,7 @@ A partir de estas conclusiones, trabajaremos con ambos modelos ($SARIMA(0,1,2)(2
 ### Modelos
 
 Presentamos los coeficientes $\theta$, $\Theta$, $\phi$ y $\Phi$ estimados 
+
 ```{r}
 params_df <- as.data.frame(fit_original %>%
                               tidy() %>%  
@@ -236,14 +234,16 @@ kable(as.data.frame(params_df),
   kable_styling() %>%
   row_spec(0, bold = T, background = "cyan4", color = "white")
 ```
+
 Los modelos estimados con los que trabajaremos se notan como:
 
 * $SARIMA(1,0,0)(2,1,0)_{(12)}$ al que llamaremos de ahora en más **modelo manual**
 
-$$(1-0,92B)(1+0,5B^{12}+0,29B^{13})(1-B^{12})Z_t=a_t $$
+$$(1-0,92B)(1+0,5B^{12}+0,29B^{24})(1-B^{12})Z_t=a_t $$
+
 * $SARIMA(0,1,2)(2,1,2)_{12}$ al que llamaremos de ahora en más **modelo automático**
 
-$$(1-0,79B^{12}+0,42B^{13})(1-B)(1-B^{12})Z_t=(1-0,97B+0,96B^2)(1+1,46B^{12}-0,69B^{13})a_t$$
+$$(1-0,79B^{12}+0,42B^{24})(1-B)(1-B^{12})Z_t=(1-0,97B+0,96B^2)(1+1,46B^{12}-0,69B^{24})a_t$$
 Para cerrar esta sección, presentamos un gráfico interactivo que permite analizar la similitud y precisión de ambos modelos ajustados. Con el objetivo de facilitar la interpretación visual, se se incluyen únicamente los datos correspondientes a los últimos cuatro años para destacar patrones recientes y poder comparar claramente.
 
 ```{r}
@@ -364,16 +364,12 @@ r2 <- ggplot(acf_df, aes(x = Lag2, y = ACF2)) +
        y = "Autocorrelación de residuos") +
   theme_minimal()
 r1+r2
-#TODO: indica errores correlacionas para la parte estacional?
 ```
 
 En el caso del modelo automático, la FAC muestra un comportamiento consistente con un *ruido blanco*, con la excepción de un bastón significativo en un rezago mayor al 20. Esto sugiere que, en general, los residuos están incorrelados.
 
 Por otro lado, la FAC de los residuos del modelo identificado manualmente revela varios rezagos significativos antes del lag 15, lo que indica que estos residuos no se comportan completamente como un *ruido blanco*. Este hallazgo podría reflejar deficiencias en el ajuste de este modelo, especialmente al momento de realizar predicciones.
 
-```{r}
-#TODO: test test de ljung box para los rezagos
-```
 
 ## Normalidad de los Residuos
 
@@ -439,13 +435,13 @@ Este análisis no solo nos proporcionará una medida de la precisión del modelo
 
 ```{r}
 # Filtramos los datos recientes
-emae_mensual_ts_recent <- emae_mensual_ts |> 
+emae_mensual_ts_recent <- emae_mensual_ts  %>%  
   filter(periodo >= as.Date("2021-06-01"))  
 
 # Forecast
-f1 <- forecast(fit_original, h = 8) |>
+f1 <- forecast(fit_original, h = 8)  %>%
   filter(.model == 'auto')
-f2 <- forecast(fit_original, h = 8) |>
+f2 <- forecast(fit_original, h = 8)  %>%
   filter(.model == 'arima11_2')
 
 values_to_predict_df <- data.frame(
@@ -480,6 +476,23 @@ g1/g2
 ```
 
 
+```{r}
+gp <- autoplot(emae_mensual_ts_recent) + 
+  autolayer(f1, series = "auto", color = "#9933CC") + 
+  autolayer(f2, series = "arima11_2", color = "#009933") + 
+  autolayer(emae_mensual_ts_recent, series = "Serie Original", color = "cyan4") + 
+  geom_point(data = values_to_predict_df, aes(x = periodo, y = values), color = "cyan4", size = 2, shape = 18) + # Valores reales
+  labs(
+    title = "EMAE con predicciones del modelo manual y valores reales",
+    y = "Indice (2004 = 100)",
+    x = "",
+    color = "Leyenda"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Serie Original" = "cyan4", "arima11_2" = "#009933", "auto" = "#9933CC"))
+
+ggplotly(gp)
+```
 
 ## Medidas de error
 
@@ -525,7 +538,9 @@ kable(metricas,
 Obervando estas metricas podemos decir que ambos modelos muestran un excelente ajuste a los datos originales. En promedio, los modelos se equivocan en apenas por encima del 2% al realizar predicciones, lo cual nos habla de una gran precisión predictiva.
 Podemos decir que cualquiermodelo es confiables para la predicción, siendo el modelo identificado "a ojo" más preciso y más parsimonioso.
 
-Es importante destacar que, si bien estamos prediciendo valores desconocidos para la serie, estos no son desconocidos para nosotros. Podríamos haber entrenado el modelo con datos hasta Agosto de 2024 y realizar predicciones para los valores futuros del EMAE.
+Es importante destacar que, si bien estamos prediciendo valores desconocidos para la serie, estos no son desconocidos para nosotros. Podríamos haber entrenado el modelo utilizando datos hasta agosto de 2024 y realizar predicciones para los valores futuros del EMAE.
+
+Tambien tenemos que notar las medidas de error excepcionalmente pequeñas, esto pueden ser un indicio de sobreajuste, es decir, que el modelo se ajusta demasiado a las particularidades del conjunto de datos de entrenamiento y pierde capacidad de generalización. Para no correr este riesgo, podriamos recurrir a diversas técnica como la division de nuestros datos en entrenamiento y testeo o la validación cruzada.
 
 # Discusión
 

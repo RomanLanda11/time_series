@@ -1,3 +1,14 @@
+You could see the result of this analysis in [romanlanda11.github.io/time_series/](https://romanlanda11.github.io/time_series/)
+
+ 
+# Structure
+```
+├───fitted              # fitted models
+|
+|
+└───index_files         # html elements
+```
+
 # Introduction
 
 The Monthly Economic Activity Estimator (EMAE) reflects the monthly evolution of
@@ -23,11 +34,17 @@ of both indicators.
 
 # Objective
 
-The objective of this report is to practically apply the analytical tools acquired
+The objective of this project is to practically apply the analytical tools acquired
 in the Time Series course, through a descriptive and predictive analysis of 
 real-world time series. This report seeks to strengthen the understanding of the
 methods studied and their application to economic data, assessing both historical
 trends and potential short- and medium-term projections of economic behavior.
+
+# Data
+
+The Argentine Time Series API provides access to chronologically evolving 
+indicators published in open formats by agencies of the National Public 
+Administration. We will use this API to retrieve the series [EMAE. Base 2004](https://datos.gob.ar/series/api/series/?ids=143.3_NO_PR_2004_A_21).
 
 # Bibliography
 
@@ -38,8 +55,3 @@ and George Athanasopoulos
 
 * *Time Series Analysis: Univariate and Multivariate Methods* (2nd ed) by William Wei
 
-# Data
-
-The Argentine Time Series API provides access to chronologically evolving 
-indicators published in open formats by agencies of the National Public 
-Administration. We will use this API to retrieve the series [EMAE. Base 2004](https://datos.gob.ar/series/api/series/?ids=143.3_NO_PR_2004_A_21).
