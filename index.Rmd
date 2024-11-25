@@ -146,11 +146,12 @@ Al analizar los gráficos de la Función de Autocorrelación (FAC) y la Función
 
 * La FACP resalta significancia en los rezagos 2 y 3, lo que podría apuntar a un modelo $AR(3)$. Sin embargo, optamos por el modelo más sencillo, $AR(1)$, para mantener la parsimonia.
 
-Para la parte estacional, observamos picos significativos en los rezagos 12 y 24, lo que indica una estacionalidad anual bien definida. Luego de aplicar una diferenciación estacional, consideramos los siguientes modelos como candidatos:
+Para la parte estacional, observamos picos significativos en los rezagos 12 y 24, lo que indica una estacionalidad anual bien definida, es por esto que recurrimos a una diferenciación. 
+Luego de aplicar la diferenciación estacional, consideramos los siguientes modelos como candidatos:
 
-* $ARIMA(1,1,0)$: Un modelo simple que captura la dinámica principal.
+* $SARIMA(1,0,0)(1,1,0)_{(12)}$: Un modelo simple que captura la dinámica principal.
 
-* $ARIMA(2,1,0)$: Una extensión que podría reflejar interacciones adicionales entre rezagos.
+* $SARIMA(1,0,0)(2,1,0)_{(12)}$: Una extensión que podría reflejar interacciones adicionales entre rezagos.
 
 Finalmente, la selección del modelo se basará en criterios de ajuste como AIC, BIC y análisis de residuos para garantizar un balance entre la bondad de ajuste y la parsimonia del modelo.
 
@@ -158,7 +159,7 @@ Finalmente, la selección del modelo se basará en criterios de ajuste como AIC,
 
 A partir del análisis previo de los gráficos de la FAC y la FACP, identificamos posibles configuraciones para los modelos ARIMA que se ajustan tanto a la parte regular como a la estacional de la serie. Con base en estos hallazgos, y para garantizar un análisis robusto, procederemos a ajustar los modelos identificados de dos maneras:
 
-* **Modelos identificados manualmente:** Utilizaremos las configuraciones sugeridas (por ejemplo, $ARIMA(1,1,0)$ y $ARIMA(2,1,0)$) como punto de partida para verificar su desempeño en el ajuste de la serie.
+* **Modelos identificados manualmente:** Utilizaremos las configuraciones sugeridas (por ejemplo, $SARIMA(1,0,0)(1,1,0)_{(12)}$ y $SARIMA(1,0,0)(2,1,0)_{(12)}$) como punto de partida para verificar su desempeño en el ajuste de la serie.
 
 * **Modelos automáticos:** Exploraremos opciones generadas automáticamente mediante métodos de selección óptimos basados en criterios como AIC y BIC, que evalúan el balance entre la complejidad del modelo y su capacidad de predicción.
 
